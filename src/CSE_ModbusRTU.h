@@ -1,15 +1,14 @@
 
 //======================================================================================//
-/*
-  Filename: CSE_ModbusRTU.h
-  Description: Main header file for the CSE_ModbusRTU library.
-  Framework: Arduino, PlatformIO
-  Author: Vishnu Mohanan (@vishnumaiea, @vizmohanan)
-  Maintainer: CIRCUITSTATE Electronics (@circuitstate)
-  Version: 0.0.9
-  License: MIT
-  Source: https://github.com/CIRCUITSTATE/CSE_ModbusRTU
-  Last Modified: +05:30 19:08:33 PM 28-05-2025, Wednesday
+/**
+ * @file CSE_ModbusRTU.h
+ * @brief Main header file for the CSE_ModbusRTU library.
+ * @date +05:30 09:56:01 AM 27-10-2024, Sunday
+ * @version 0.0.9
+ * @author Vishnu Mohanan (@vishnumaiea)
+ * @par GitHub Repository: https://github.com/CIRCUITSTATE/CSE_ModbusRTU
+ * @par MIT License
+ * 
  */
 //======================================================================================//
 
@@ -33,45 +32,45 @@
 //======================================================================================//
 
 // Modbus constants and limits
-#define   MODBUS_RTU_ADU_LENGTH_MAX                     256U
-#define   MODBUS_RTU_PDU_LENGTH_MAX                     253U
-#define   MODBUS_RTU_ADDR_LENGTH_MAX                    2U
-#define   MODBUS_RTU_CRC_LENGTH                         2U
-#define   MODBUS_RTU_ADU_ADDRESS_INDEX                  0U
-#define   MODBUS_RTU_ADU_FUNCTION_CODE_INDEX            1U
-#define   MODBUS_RTU_ADU_EXCEPTION_CODE_INDEX           2U
-#define   MODBUS_RTU_ADU_DATA_LENGTH_MAX                252U  // Doesn't include the function code
-#define   MODBUS_RTU_ADU_DATA_INDEX                     2U
-#define   MODBUS_RTU_COIL_COUNT_MAX                     100U
-#define   MODBUS_RTU_DISCRETE_INPUT_COUNT_MAX           100U
-#define   MODBUS_RTU_INPUT_REGISTER_COUNT_MAX           100U
-#define   MODBUS_RTU_HOLDING_REGISTER_COUNT_MAX         100U
+#define   MODBUS_RTU_ADU_LENGTH_MAX                     256
+#define   MODBUS_RTU_PDU_LENGTH_MAX                     253
+#define   MODBUS_RTU_ADDR_LENGTH_MAX                    2
+#define   MODBUS_RTU_CRC_LENGTH                         2
+#define   MODBUS_RTU_ADU_ADDRESS_INDEX                  0
+#define   MODBUS_RTU_ADU_FUNCTION_CODE_INDEX            1
+#define   MODBUS_RTU_ADU_EXCEPTION_CODE_INDEX           2
+#define   MODBUS_RTU_ADU_DATA_LENGTH_MAX                252  // Doesn't include the function code
+#define   MODBUS_RTU_ADU_DATA_INDEX                     2
+#define   MODBUS_RTU_COIL_COUNT_MAX                     100
+#define   MODBUS_RTU_DISCRETE_INPUT_COUNT_MAX           100
+#define   MODBUS_RTU_INPUT_REGISTER_COUNT_MAX           100
+#define   MODBUS_RTU_HOLDING_REGISTER_COUNT_MAX         100
 
 // Modbus function codes
-#define   MODBUS_FC_READ_COILS                          0x01U
-#define   MODBUS_FC_READ_DISCRETE_INPUTS                0x02U
-#define   MODBUS_FC_READ_HOLDING_REGISTERS              0x03U
-#define   MODBUS_FC_READ_INPUT_REGISTERS                0x04U
-#define   MODBUS_FC_WRITE_SINGLE_COIL                   0x05U
-#define   MODBUS_FC_WRITE_SINGLE_REGISTER               0x06U
-#define   MODBUS_FC_READ_EXCEPTION_STATUS               0x07U
-#define   MODBUS_FC_WRITE_MULTIPLE_COILS                0x0FU
-#define   MODBUS_FC_WRITE_MULTIPLE_REGISTERS            0x10U
-#define   MODBUS_FC_REPORT_SERVER_ID                    0x11U
-#define   MODBUS_FC_MASK_WRITE_REGISTER                 0x16U
-#define   MODBUS_FC_WRITE_AND_READ_REGISTERS            0x17U
+#define   MODBUS_FC_READ_COILS                          0x01
+#define   MODBUS_FC_READ_DISCRETE_INPUTS                0x02
+#define   MODBUS_FC_READ_HOLDING_REGISTERS              0x03
+#define   MODBUS_FC_READ_INPUT_REGISTERS                0x04
+#define   MODBUS_FC_WRITE_SINGLE_COIL                   0x05
+#define   MODBUS_FC_WRITE_SINGLE_REGISTER               0x06
+#define   MODBUS_FC_READ_EXCEPTION_STATUS               0x07
+#define   MODBUS_FC_WRITE_MULTIPLE_COILS                0x0F
+#define   MODBUS_FC_WRITE_MULTIPLE_REGISTERS            0x10
+#define   MODBUS_FC_REPORT_SERVER_ID                    0x11
+#define   MODBUS_FC_MASK_WRITE_REGISTER                 0x16
+#define   MODBUS_FC_WRITE_AND_READ_REGISTERS            0x17
 
 // Modbus exception codes
-#define   MODBUS_EX_ILLEGAL_FUNCTION                    0x01U
-#define   MODBUS_EX_ILLEGAL_DATA_ADDRESS                0x02U
-#define   MODBUS_EX_ILLEGAL_DATA_VALUE                  0x03U
-#define   MODBUS_EX_SERVER_DEVICE_FAILURE               0x04U
-#define   MODBUS_EX_ACKNOWLEDGE                         0x05U
-#define   MODBUS_EX_SERVER_DEVICE_BUSY                  0x06U
-#define   MODBUS_EX_NEGATIVE_ACKNOWLEDGE                0x07U
-#define   MODBUS_EX_MEMORY_PARITY_ERROR                 0x08U
-#define   MODBUS_EX_GATEWAY_PATH_UNAVAILABLE            0x0AU
-#define   MODBUS_EX_GATEWAY_TARGET_NO_RESPONSE          0x0BU
+#define   MODBUS_EX_ILLEGAL_FUNCTION                    0x01
+#define   MODBUS_EX_ILLEGAL_DATA_ADDRESS                0x02
+#define   MODBUS_EX_ILLEGAL_DATA_VALUE                  0x03
+#define   MODBUS_EX_SERVER_DEVICE_FAILURE               0x04
+#define   MODBUS_EX_ACKNOWLEDGE                         0x05
+#define   MODBUS_EX_SERVER_DEVICE_BUSY                  0x06
+#define   MODBUS_EX_NEGATIVE_ACKNOWLEDGE                0x07
+#define   MODBUS_EX_MEMORY_PARITY_ERROR                 0x08
+#define   MODBUS_EX_GATEWAY_PATH_UNAVAILABLE            0x0A
+#define   MODBUS_EX_GATEWAY_TARGET_NO_RESPONSE          0x0B
 
 //======================================================================================//
 // This section allows you to configure the debug message printing capability of the library.
@@ -119,32 +118,28 @@ class CSE_ModbusRTU_Debug;
 
 //======================================================================================//
 
-/**
- * @brief This class allows you to enable or disable debug messages from the user code
- * space.
- * 
- */
+// Define the DebugUtils class
 class CSE_ModbusRTU_Debug {
-  public:
-    // Function to enable debug messages
-    static void enableDebugMessages() {
-      debugEnabled = true;
-    }
+public:
+  // Function to enable debug messages
+  static void enableDebugMessages() {
+    debugEnabled = true;
+  }
 
-    // Function to disable debug messages
-    static void disableDebugMessages() {
-      debugEnabled = false;
-    }
+  // Function to disable debug messages
+  static void disableDebugMessages() {
+    debugEnabled = false;
+  }
 
-    // Friend class declaration
-    friend class CSE_ModbusRTU_ADU; // Add more friend classes as needed
-    friend class CSE_ModbusRTU;
-    friend class CSE_ModbusRTU_Server;
-    friend class CSE_ModbusRTU_Client;
+  // Friend class declaration
+  friend class CSE_ModbusRTU_ADU; // Add more friend classes as needed
+  friend class CSE_ModbusRTU;
+  friend class CSE_ModbusRTU_Server;
+  friend class CSE_ModbusRTU_Client;
 
-  private:
-    // Variable to track debug state
-    static bool debugEnabled;
+private:
+  // Variable to track debug state
+  static bool debugEnabled;
 };
 
 //======================================================================================//
@@ -326,6 +321,7 @@ class CSE_ModbusRTU_Server {
 
     bool begin(); // Does nothing for now.
     int poll(); // Listen for incoming requests from the client and process them
+    int custom_poll();
     int receive(); // Receive a request from the client
     int send(); // Send a response to the client
 
