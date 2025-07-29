@@ -1,15 +1,14 @@
 
 //======================================================================================//
-/*
-  Filename: CSE_ModbusRTU.cpp
-  Description: Main source file for the CSE_ModbusRTU library.
-  Framework: Arduino, PlatformIO
-  Author: Vishnu Mohanan (@vishnumaiea, @vizmohanan)
-  Maintainer: CIRCUITSTATE Electronics (@circuitstate)
-  Version: 0.0.9
-  License: MIT
-  Source: https://github.com/CIRCUITSTATE/CSE_ModbusRTU
-  Last Modified: +05:30 19:09:06 PM 28-05-2025, Wednesday
+/**
+ * @file CSE_ModbusRTU.cpp
+ * @brief Main source file for the CSE_ModbusRTU library.
+ * @date +05:30 09:55:57 AM 27-10-2024, Sunday
+ * @version 0.0.8
+ * @author Vishnu Mohanan (@vishnumaiea)
+ * @par GitHub Repository: https://github.com/CIRCUITSTATE/CSE_ModbusRTU
+ * @par MIT License
+ * 
  */
 //======================================================================================//
 
@@ -1060,9 +1059,6 @@ int CSE_ModbusRTU_Server:: poll() {
       // if all of the holding registers in the range are present in the server.
       if ((request.getQuantity() > 0x007D) || (!isHoldingRegisterPresent (request.getStartingAddress(), request.getQuantity()))) {
         // Then process an exception
-        DEBUG_PRINTLN (F("poll(): Invalid request to read holding registers."));
-        DEBUG_PRINTLN (F("poll(): ERROR - Exception: Illegal data value."));
-        DEBUG_PRINTLN (F("poll(): Sending exception response."));
         response.resetLength(); // Reset the response length
         response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
         response.setFunctionCode (MODBUS_FC_READ_HOLDING_REGISTERS); // Set the function code of the response
@@ -1113,6 +1109,478 @@ int CSE_ModbusRTU_Server:: poll() {
       response.add (registerData, byteCount); // Add the register data to the response ADU
       response.setCRC(); // Set the CRC of the response
       send(); // Send the response
+      return MODBUS_FC_READ_HOLDING_REGISTERS; // Return the function code
+      break;
+    }
+
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_READ_INPUT_REGISTERS: {
+      // Check if the input register count is valid (the maximum in a request is 0x007D) or
+      // if all of the input registers in the range are present in the server.
+      if ((request.getQuantity() > 0x007D) || (!isInputRegisterPresent (request.getStartingAddress(), request.getQuantity()))) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_READ_INPUT_REGISTERS); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_VALUE); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_READ_INPUT_REGISTERS + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to read input registers 0x"));
+      DEBUG_PRINT (request.getStartingAddress(), HEX);
+      DEBUG_PRINT (F(" to 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress() + request.getQuantity() - 1, HEX);
+
+
+      // If the request is valid, we can proceed with reading the input registers specified
+      // and adding them to the response ADU.
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (MODBUS_FC_READ_INPUT_REGISTERS); // Set the function code of the response
+
+      uint8_t registerCount = request.getQuantity(); // Get the number of registers needed (1-125)
+      uint8_t byteCount = registerCount * 2; // Get the number of bytes needed
+
+      // Create an array to store the register data.
+      // Since the register data is 16-bit, we need double the number of bytes.
+      uint8_t inputRegisterData [byteCount] = {0};
+
+      // Read the register data from the input registers and write them to the array
+      for (int i = request.getStartingAddress(), j = 0; i < (request.getStartingAddress() + request.getQuantity()); i++) {
+        for (int k = 0; k < inputRegisters.size(); k++) {
+          if (holdingRegisters [k].address == i) {
+            inputRegisterData [j] = inputRegisters [k].value >> 8; // Get the high byte
+            inputRegisterData [j + 1] = inputRegisters [k].value & 0xFF; // Get the low byte
+            j += 2;
+
+            DEBUG_PRINT ("Address: 0x");
+            DEBUG_PRINT (i, HEX);
+            DEBUG_PRINT (", Value: 0x");
+            DEBUG_PRINTLN (inputRegisters [k].value, HEX);
+          }
+        }
+      }
+
+      response.add (byteCount); // Set the byte count of the response
+
+      // Now we need to copy the input register data into the response ADU
+      response.add (inputRegisterData, byteCount); // Add the input register data to the response ADU
+      response.setCRC(); // Set the CRC of the response
+      send(); // Send the response
+      return MODBUS_FC_READ_INPUT_REGISTERS; // Return the function code
+      break;
+    }
+
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_WRITE_SINGLE_COIL: {
+      // Check if the coil is present in the server
+      if (!isCoilPresent (request.getStartingAddress())) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_WRITE_SINGLE_COIL); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_ADDRESS); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_WRITE_SINGLE_COIL + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to write single coil 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress(), HEX);
+
+      // If the coil is present in the server, we can proceed with writing the coil specified.
+      // The coil state will be after the starting address in the request ADU.
+      // The state can be either 0x0000 (OFF) or 0xFF00 (ON).
+      DEBUG_PRINT (F("poll(): Writing value 0x"));
+      if (request.getWord (MODBUS_RTU_ADU_DATA_INDEX + 2) == 0x00) {
+        DEBUG_PRINTLN (F("00"));
+        writeCoil (request.getStartingAddress(), 0x00); // Write the coil to the server
+      }
+      else {
+        DEBUG_PRINTLN (F("01"));
+        writeCoil (request.getStartingAddress(), 0x01); // Write the coil to the server
+      }
+
+      // For successful coil writes, the response ADU is the same as the request ADU
+      response = request; // Copy the request ADU to the response ADU
+      send(); // Send the response
+      return MODBUS_FC_WRITE_SINGLE_COIL; // Return the function code
+      break;
+    }
+    
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_WRITE_SINGLE_REGISTER: {
+      // Check if the holding register is present in the server
+      if (!isHoldingRegisterPresent (request.getStartingAddress())) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_WRITE_SINGLE_REGISTER); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_ADDRESS); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_WRITE_SINGLE_REGISTER + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to write single register 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress(), HEX);
+
+      // If the holding register is present in the server, we can proceed with writing the holding register specified.
+      // The holding register value will be after the starting address in the request ADU.
+      writeHoldingRegister (request.getStartingAddress(), request.getWord (MODBUS_RTU_ADU_DATA_INDEX + 2)); // Write the holding register to the server
+
+      // For successful holding register writes, the response ADU is the same as the request ADU
+      response = request; // Copy the request ADU to the response ADU
+      send(); // Send the response
+      return MODBUS_FC_WRITE_SINGLE_REGISTER; // Return the function code
+      break;
+    }
+
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_WRITE_MULTIPLE_COILS: {
+      // Check if the coils are present in the server,
+      // and the requested register count. The maximum register count is 0x07B0 (1968).
+      if ((request.getQuantity() > 0x07B0) || (!isCoilPresent (request.getStartingAddress(), request.getQuantity()))) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_WRITE_MULTIPLE_COILS); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_ADDRESS); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_WRITE_MULTIPLE_COILS + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to write multiple coils 0x"));
+      DEBUG_PRINT (request.getStartingAddress(), HEX);
+      DEBUG_PRINT (F(" to 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress() + request.getQuantity() - 1, HEX);
+
+      // The coil data will come packed as bits in the data field of the ADU.
+      // So we need to extract each coil data and write them to the server.
+
+      // Create an array with the sepcified number of coil registers.
+      // Coil register count is not the same as the byte count.
+      uint8_t coilData [request.getQuantity()] = {0}; //
+      uint8_t byteCount = request.getByte (MODBUS_RTU_ADU_DATA_INDEX + 4); // Get the byte count
+
+      // Now we need to copy the coil data from the request ADU
+      for (int i = 0, j = 0; i < byteCount; i++) {
+        for (int k = 0; ((k < 8) && (j < request.getQuantity())); k++) {
+          coilData [j] = (request.getByte (MODBUS_RTU_ADU_DATA_INDEX + 5 + i) >> k) & 0x01;
+          j++;
+        }
+      }
+
+      for (int i = 0; i < request.getQuantity(); i++) {
+        writeCoil (request.getStartingAddress() + i, coilData [i]); // Write the coil to the server
+      }
+
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (MODBUS_FC_WRITE_MULTIPLE_COILS); // Set the function code of the response
+      response.add (request.getStartingAddress()); // Set the starting address of the response
+      response.add (request.getQuantity()); // Set the quantity of the response
+      response.setCRC(); // Set the CRC of the response
+      send(); // Send the response
+      return MODBUS_FC_WRITE_MULTIPLE_COILS; // Return the function code
+      break;
+    }
+
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_WRITE_MULTIPLE_REGISTERS: {
+      // Check if the holding registers are present in the server,
+      // and the requested register count. The maximum register count is 0x007B (123).
+      if ((request.getQuantity() > 0x007B) || (!isHoldingRegisterPresent (request.getStartingAddress(), request.getQuantity()))) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_WRITE_MULTIPLE_REGISTERS); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_ADDRESS); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_WRITE_MULTIPLE_REGISTERS + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to write multiple registers 0x"));
+      DEBUG_PRINT (request.getStartingAddress(), HEX);
+      DEBUG_PRINT (F(" to 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress() + request.getQuantity() - 1, HEX);
+
+      // The holding register data will come packed as 16-bit words in the data field of the ADU.
+      // So we need to extract each holding register data and write them to the server.
+
+      // Create an array with the sepcified number of holding registers.
+      // Holding register count is not the same as the word count.
+      uint16_t holdingRegisterData [request.getQuantity()] = {0}; //
+      uint8_t byteCount = request.getByte (MODBUS_RTU_ADU_DATA_INDEX + 4); // Get the byte count
+
+      // Now we need to copy the holding register data from the request ADU
+      for (int i = 0, j = 0; i < byteCount; i += 2) {
+        holdingRegisterData [j] = request.getWord (MODBUS_RTU_ADU_DATA_INDEX + 5 + i);
+        j++;
+      }
+
+      for (int i = 0; i < request.getQuantity(); i++) {
+        writeHoldingRegister (request.getStartingAddress() + i, holdingRegisterData [i]); // Write the holding register to the server
+      }
+
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (MODBUS_FC_WRITE_MULTIPLE_REGISTERS); // Set the function code of the response
+      response.add (request.getStartingAddress()); // Set the starting address of the response
+      response.add (request.getQuantity()); // Set the quantity of the response
+      response.setCRC(); // Set the CRC of the response
+      send(); // Send the response
+      return MODBUS_FC_WRITE_MULTIPLE_REGISTERS; // Return the function code
+      break;
+    }
+
+    //---------------------------------------------------------------------------------//
+    
+    default: {
+      DEBUG_PRINT (F("poll(): Received unsupported function code: 0x"));
+      DEBUG_PRINTLN (request.getFunctionCode(), HEX);
+      DEBUG_PRINTLN (F("poll(): Returning exception."));
+
+      // Any unsupported function code will be processed as an exception
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (request.getFunctionCode()); // Set the function code of the response
+      response.setException(); // Set the exception bit of the function code
+      response.setExceptionCode (MODBUS_EX_ILLEGAL_FUNCTION); // Set the exception code
+      response.setCRC(); // Set the CRC of the response
+      send(); // Send the response
+      return request.getFunctionCode() + 0x80; // Return exception function code
+      break;
+    }
+  }
+}
+
+//======================================================================================//
+/**
+ * @brief This function is used to poll the server for new requests. When a request is
+ * received, it is disassembled into the request ADU and checked for validity. This
+ * function takes care of checking what type of request it is and then send a response
+ * back to the client. The response is assembled into the response ADU. Finally, the
+ * type of request received is returned. THIS HAS BEEN EDITED TO PROVIDE CUSTOM FUNCTIONALITY FOR READING.
+ * 
+ * @return int - Function code, or -1 if the operation fails.
+ */
+int CSE_ModbusRTU_Server:: custom_poll() {
+  // First received a new ADU from the client
+  if (receive() < 0) {
+    return -1;
+  }
+
+  // Now check if the address of the request matches the address of the server
+  if (request.getDeviceAddress() != rtu->deviceAddress) {
+    DEBUG_PRINTLN (F("poll(): Server addresses does not match."));
+    return -1;
+  }
+
+  // Check if the ADU received is an exception. A server is not meant to receive
+  // a request that is an exception.
+  if (request.getExceptionCode() != 0x00) {
+    DEBUG_PRINTLN (F("poll(): Received an exception request to server."));
+    return -1;
+  }
+
+  // Now check what type of function code was received
+  switch (request.getFunctionCode()) {
+    case MODBUS_FC_READ_COILS: {
+      // Check if the coil count is valid (the maximum in a request is 0x07D0) or
+      // if all of the coils in the range are present in the server.
+      if ((request.getQuantity() > 0x07D0) || (!isCoilPresent (request.getStartingAddress(), request.getQuantity()))) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_READ_COILS); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_VALUE); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_READ_COILS + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to read coils 0x"));
+      DEBUG_PRINT (request.getStartingAddress(), HEX);
+      DEBUG_PRINT (F(" to 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress() + request.getQuantity() - 1, HEX);
+
+      // If the request is valid, we can proceed with reading the coils specified
+      // and adding them to the response ADU.
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (MODBUS_FC_READ_COILS); // Set the function code of the response
+
+      // // Now we need to find how many bytes will be needed to pack the specified number of
+      // // coils states into the response ADU by packing each coil state into a bit.
+      // uint8_t byteCount = request.getQuantity() / 8; // Get the number of bytes needed
+
+      // if ((request.getQuantity() % 8) != 0) {
+      //   byteCount++; // Add one more byte if the number of coils is not a multiple of 8
+      // }
+
+      // if (byteCount > 0xFB) {
+      //   byteCount = 0xFB; // The maximum number of bytes is 0xFB
+      // }
+
+      // response.add (byteCount); // Set the byte count of the response
+
+      // // Now we need to pack the coil states into the response ADU
+      // uint8_t coilData [byteCount] = {0}; // Create an array to store the coil data
+
+      // for (int i = request.getStartingAddress(), j = 0; i < (request.getStartingAddress() + request.getQuantity()); i++) {
+      //   if (coils [i].value == 0) {
+      //     coilData [j / 8] &= ~(1U << (j % 8)); // Clear the bit
+      //   }
+      //   else {
+      //     coilData [j / 8] |= (1U << (j % 8)); // Set the bit
+      //   }
+      //   j++;
+      // }
+
+      // // Now we need to copy the coil data into the response ADU
+      // response.add (coilData, byteCount); // Add the coil data to the response ADU
+      // response.setCRC(); // Set the CRC of the response
+      // send(); // Send the response
+      return MODBUS_FC_READ_COILS; // Return the function code
+      break;
+    }
+    
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_READ_DISCRETE_INPUTS: {
+      // Check if the discrete input count is valid (the maximum in a request is 0x07D0) or
+      // if all of the discrete inputs in the range are present in the server.
+      if ((request.getQuantity() > 0x07D0) || (!isDiscreteInputPresent (request.getStartingAddress(), request.getQuantity()))) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_READ_DISCRETE_INPUTS); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_VALUE); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_READ_DISCRETE_INPUTS + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to read discrete inputs 0x"));
+      DEBUG_PRINT (request.getStartingAddress(), HEX);
+      DEBUG_PRINT (F(" to 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress() + request.getQuantity() - 1, HEX);
+
+
+      // If the request is valid, we can proceed with reading the discrete inputs specified
+      // and adding them to the response ADU.
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (MODBUS_FC_READ_DISCRETE_INPUTS); // Set the function code of the response
+
+      // Now we need to find how many bytes will be needed to pack the specified number of
+      // discrete input states into the response ADU by packing each discrete input state into a bit.
+      uint8_t byteCount = request.getQuantity() / 8; // Get the number of bytes needed
+
+      if ((request.getQuantity() % 8) != 0) {
+        byteCount++; // Add one more byte if the number of discrete inputs is not a multiple of 8
+      }
+
+      if (byteCount > 0xFB) {
+        byteCount = 0xFB; // The maximum number of bytes is 0xFB
+      }
+
+      response.add (byteCount); // Set the byte count of the response
+
+      // Now we need to pack the discrete input states into the response ADU
+      uint8_t discreteInputData [byteCount] = {0}; // Create an array to store the discrete input data
+
+      for (int i = request.getStartingAddress(), j = 0; i < (request.getStartingAddress() + request.getQuantity()); i++) {
+        if (discreteInputs [i].value == 0) {
+          discreteInputData [j / 8] &= ~(1U << (j % 8)); // Clear the bit
+        }
+        else {
+          discreteInputData [j / 8] |= (1U << (j % 8)); // Set the bit
+        }
+        j++;
+      }
+
+      // Now we need to copy the discrete input data into the response ADU
+      response.add (discreteInputData, byteCount); // Add the discrete input data to the response ADU
+      response.setCRC(); // Set the CRC of the response
+      send(); // Send the response
+      return MODBUS_FC_READ_DISCRETE_INPUTS; // Return the function code
+      break;
+    }
+    //---------------------------------------------------------------------------------//
+
+    case MODBUS_FC_READ_HOLDING_REGISTERS: {
+      // Check if the holding register count is valid (the maximum in a request is 0x007D) or
+      // if all of the holding registers in the range are present in the server.
+      if ((request.getQuantity() > 0x007D) || (!isHoldingRegisterPresent (request.getStartingAddress(), request.getQuantity()))) {
+        // Then process an exception
+        response.resetLength(); // Reset the response length
+        response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+        response.setFunctionCode (MODBUS_FC_READ_HOLDING_REGISTERS); // Set the function code of the response
+        response.setException(); // Set the exception bit of the function code
+        response.setExceptionCode (MODBUS_EX_ILLEGAL_DATA_VALUE); // Set the exception code
+        response.setCRC(); // Set the CRC of the response
+        send(); // Send the response
+        return MODBUS_FC_READ_HOLDING_REGISTERS + 0x80; // Return exception function code
+      }
+
+      DEBUG_PRINT (F("poll(): Received request to read holding registers 0x"));
+      DEBUG_PRINT (request.getStartingAddress(), HEX);
+      DEBUG_PRINT (F(" to 0x"));
+      DEBUG_PRINTLN (request.getStartingAddress() + request.getQuantity() - 1, HEX);
+
+
+      // If the request is valid, we can proceed with reading the holding registers specified
+      // and adding them to the response ADU.
+      response.resetLength(); // Reset the response length
+      response.setDeviceAddress (rtu->deviceAddress); // Set the address of the response
+      response.setFunctionCode (MODBUS_FC_READ_HOLDING_REGISTERS); // Set the function code of the response
+
+      // uint16_t registerCount = request.getQuantity(); // Get the number of registers needed
+      // uint8_t byteCount = registerCount * 2; // Get the number of bytes needed
+
+      // // Create an array to store the register data.
+      // // Since the register data is 16-bit, we need double the number of bytes.
+      // uint8_t registerData [byteCount] = {0};
+
+      // // Read the register data from the holding registers and write them to the array
+      // for (int i = request.getStartingAddress(), j = 0; i < (request.getStartingAddress() + request.getQuantity()); i++) {
+      //   for (int k = 0; k < holdingRegisters.size(); k++) {
+      //     if (holdingRegisters [k].address == i) {
+      //       registerData [j] = holdingRegisters [k].value >> 8; // Get the high byte
+      //       registerData [j + 1] = holdingRegisters [k].value & 0xFF; // Get the low byte
+      //       j += 2;
+      //       DEBUG_PRINT ("Address: 0x");
+      //       DEBUG_PRINT (i, HEX);
+      //       DEBUG_PRINT (", Value: 0x");
+      //       DEBUG_PRINTLN (holdingRegisters [k].value, HEX);
+      //     }
+      //   }
+      // }
+
+      // response.add (byteCount); // Set the byte count of the response
+      
+      // // Now we need to copy the register data into the response ADU
+      // response.add (registerData, byteCount); // Add the register data to the response ADU
+      // response.setCRC(); // Set the CRC of the response
+      // send(); // Send the response
       return MODBUS_FC_READ_HOLDING_REGISTERS; // Return the function code
       break;
     }
@@ -1524,7 +1992,7 @@ bool CSE_ModbusRTU_Server:: configureHoldingRegisters (uint16_t startAddress, ui
     return false;
   }
 
-  // Now check if the input holding register count won't exceed the maximum holding register count
+  // Now check if the input holding register count won's exceed the maximum holding register count
   if ((holdingRegisters.size() + quantity) > MODBUS_RTU_HOLDING_REGISTER_COUNT_MAX) {
     return false;
   }
